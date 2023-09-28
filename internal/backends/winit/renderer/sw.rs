@@ -150,18 +150,27 @@ impl super::WinitCompatibleRenderer for WinitSoftwareRenderer {
         };
 
         let size = region.bounding_box_size();
-        if let Some((w, h)) = Option::zip(NonZeroU32::new(size.width), NonZeroU32::new(size.height))
-        {
-            winit_window.pre_present_notify();
-            let pos = region.bounding_box_origin();
-            target_buffer
-                .present_with_damage(&[softbuffer::Rect {
-                    width: w,
-                    height: h,
-                    x: pos.x as u32,
-                    y: pos.y as u32,
-                }])
-                .map_err(|e| format!("Error presenting softbuffer buffer: {e}"))?;
+        match Option::zip(NonZeroU32::new(size.width), NonZeroU32::new(size.height)) {
+            Some((w, h)) => {
+                winit_window.pre_present_notify();
+                let pos = region.bounding_box_origin();
+                target_buffer
+                    .present_with_damage(&[softbuffer::Rect {
+                        width: w,
+                        height: h,
+                        x: pos.x as u32,
+                        y: pos.y as u32,
+                    }])
+                    .map_err(|e| format!("Error presenting softbuffer buffer: {e}"))?;
+            }
+            None => {
+                // If we get here the redraw was possibly not initiated by us
+                // and we should probably redraw everything.
+                winit_window.pre_present_notify();
+                target_buffer
+                    .present()
+                    .map_err(|e| format!("Error presenting softbuffer buffer: {e}"))?;
+            }
         }
         Ok(DrawOutcome::Success)
     }
