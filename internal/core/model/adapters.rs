@@ -429,6 +429,10 @@ where
     fn model_tracker(&self) -> &dyn ModelTracker {
         &self.0.notify
     }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }
 
 #[test]
@@ -496,7 +500,7 @@ where
 struct SortModelInner<M, S>
 where
     M: Model + 'static,
-    S: SortHelper<M::Data>,
+    S: SortHelper<M::Data> + 'static,
 {
     wrapped_model: M,
     sort_helper: RefCell<S>,
@@ -534,7 +538,7 @@ where
 impl<M, S> ModelChangeListener for SortModelInner<M, S>
 where
     M: Model + 'static,
-    S: SortHelper<M::Data>,
+    S: SortHelper<M::Data> + 'static,
 {
     fn row_changed(&self, row: usize) {
         if self.sorted_rows_dirty.get() {
@@ -738,7 +742,7 @@ where
 pub struct SortModel<M, F>(Pin<Box<ModelChangeListenerContainer<SortModelInner<M, F>>>>)
 where
     M: Model + 'static,
-    F: SortHelper<M::Data>;
+    F: SortHelper<M::Data> + 'static;
 
 impl<M, F> SortModel<M, F>
 where
@@ -834,6 +838,10 @@ where
 
     fn model_tracker(&self) -> &dyn ModelTracker {
         &self.0.notify
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
 
@@ -1095,6 +1103,10 @@ where
 
     fn model_tracker(&self) -> &dyn ModelTracker {
         &self.0.notify
+    }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
     }
 }
 
