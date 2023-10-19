@@ -1018,10 +1018,12 @@ pub struct ReverseModel<M>(Pin<Box<ModelChangeListenerContainer<ReverseModelInne
 where
     M: Model + 'static;
 
+#[pin_project]
 struct ReverseModelInner<M>
 where
     M: Model + 'static,
 {
+    #[pin]
     wrapped_model: M,
     notify: ModelNotify,
 }
@@ -1064,6 +1066,11 @@ where
         let container = Box::pin(ModelChangeListenerContainer::new(inner));
         container.wrapped_model.model_tracker().attach_peer(container.as_ref().model_peer());
         Self(container)
+    }
+
+    /// Returns a reference to the inner model
+    pub fn source_model(&self) -> Pin<&M> {
+        self.0.as_ref().get().project_ref().wrapped_model
     }
 }
 
@@ -1186,5 +1193,18 @@ mod reversed_tests {
             assert_eq!(*observer.reset.borrow(), 0);
             assert_eq!(model.row_data(mapped_idx), Some(10));
         }
+    }
+
+    #[test]
+    fn test_reversed_model_inner() {
+        let wrapped_rc = Rc::new(VecModel::from(vec![1, 2, 3, 4]));
+        let model = ReverseModel::new(wrapped_rc.clone());
+
+        let observer = Box::pin(ModelChangeListenerContainer::<TestView>::default());
+        model.model_tracker().attach_peer(Pin::as_ref(&observer).model_peer());
+
+        model.source_model().push(5);
+
+        check_content(&model, &[5, 4, 3, 2, 1]);
     }
 }
