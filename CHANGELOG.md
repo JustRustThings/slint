@@ -3,6 +3,22 @@
 # Changelog
 All notable changes to this project are documented in this file.
 
+## [1.13.0] - Unreleased
+
+### Rust
+
+ - Minimum Supported Rust Version (MSRV) is 1.85
+ - Upgraded WGPU dependency to version 25: The `unstable-wgpu-25` Cargo feature replaces the old `unstable-wgpu-24` feature,
+   and the `slint::wgpu_25` module replaces the `slint::wgpu_24` module. There were no further changes to the API.
+
+### Node.js API
+
+ - Fixed panic when attempting to convert brushes to colors.
+
+### Python
+
+ - Added support for automatically mapping exported Slint enums to property Python `enum.Enum` subclasses.
+
 ## [1.12.1] - 2025-06-25
 
 ### General
