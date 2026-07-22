@@ -722,6 +722,34 @@ impl Drop for Backend {
     }
 }
 
+#[cfg(target_os = "windows")]
+unsafe fn delay_load<T>(
+    library: windows::core::PCSTR,
+    function: windows::core::PCSTR,
+) -> Option<T> {
+    use windows::Win32::Foundation::FreeLibrary;
+    use windows::Win32::System::LibraryLoader::{
+        GetProcAddress, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LoadLibraryExA,
+    };
+
+    unsafe {
+        let library = LoadLibraryExA(library, None, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+
+        let Ok(library) = library else {
+            return None;
+        };
+
+        let address = GetProcAddress(library, function);
+
+        if address.is_some() {
+            return Some(core::mem::transmute_copy(&address));
+        }
+
+        FreeLibrary(library);
+        None
+    }
+}
+
 impl i_slint_core::platform::Platform for Backend {
     fn bind_context(&self, _ctx: i_slint_core::SlintContextWeak, _: i_slint_core::InternalToken) {
         #[cfg(xdg_desktop_settings)]
@@ -731,31 +759,41 @@ impl i_slint_core::platform::Platform for Backend {
         }
         #[cfg(target_os = "windows")]
         if let Some(ctx) = _ctx.upgrade() {
-            use windows::Win32::UI::HiDpi::SystemParametersInfoForDpi;
+            type SystemParametersInfoForDpiFn =
+                unsafe extern "system" fn(u32, u32, *mut std::ffi::c_void, u32, u32) -> i32;
+
             use windows::Win32::UI::WindowsAndMessaging::{
                 NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS,
             };
-            let mut metrics = NONCLIENTMETRICSW {
-                cbSize: core::mem::size_of::<NONCLIENTMETRICSW>() as u32,
-                ..NONCLIENTMETRICSW::default()
-            };
-            let ok = unsafe {
-                SystemParametersInfoForDpi(
-                    SPI_GETNONCLIENTMETRICS.0,
-                    metrics.cbSize,
-                    Some(&mut metrics as *mut _ as *mut core::ffi::c_void),
-                    0,
-                    96,
+
+            if let Some(func) = unsafe {
+                delay_load::<SystemParametersInfoForDpiFn>(
+                    windows::core::s!("user32.dll"),
+                    windows::core::s!("SystemParametersInfoForDpi"),
                 )
-            }
-            .is_ok();
-            // `lfMessageFont.lfHeight` is in pixels at 96 DPI = Slint logical pixels;
-            // negative means em height, positive means cell height — magnitude is fine here.
-            let height = metrics.lfMessageFont.lfHeight.unsigned_abs();
-            if ok && height > 0 {
-                ctx.set_platform_default_font_size(Some(
-                    i_slint_core::lengths::LogicalLength::new(height as f32),
-                ));
+            } {
+                let mut metrics = NONCLIENTMETRICSW {
+                    cbSize: core::mem::size_of::<NONCLIENTMETRICSW>() as u32,
+                    ..NONCLIENTMETRICSW::default()
+                };
+                let res = unsafe {
+                    (func)(
+                        SPI_GETNONCLIENTMETRICS.0,
+                        metrics.cbSize,
+                        &mut metrics as *mut _ as *mut core::ffi::c_void,
+                        0,
+                        96,
+                    )
+                };
+                let ok = windows::core::BOOL(res).as_bool();
+                // `lfMessageFont.lfHeight` is in pixels at 96 DPI = Slint logical pixels;
+                // negative means em height, positive means cell height — magnitude is fine here.
+                let height = metrics.lfMessageFont.lfHeight.unsigned_abs();
+                if ok && height > 0 {
+                    ctx.set_platform_default_font_size(Some(
+                        i_slint_core::lengths::LogicalLength::new(height as f32),
+                    ));
+                }
             }
         }
     }
